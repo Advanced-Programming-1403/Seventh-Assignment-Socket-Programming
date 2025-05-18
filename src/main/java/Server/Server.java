@@ -1,8 +1,10 @@
 package Server;
+
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 import Shared.User;
+
 public class Server {
     // Predefined users for authentication
     private static final User[] users = {
@@ -10,20 +12,30 @@ public class Server {
             new User("user2", "1234"),
             new User("user3", "1234"),
             new User("user4", "1234"),
-            new User("user5", "1234"),
+            new User("user5", "1234")
     };
 
     // List of currently connected clients
     public static ArrayList<ClientHandler> clients = new ArrayList<>();
 
-    public static void main(String[] args) throws Exception {
-        // TODO: Create a ServerSocket listening on a port (e.g., 12345)
+    public static void main(String[] args) {
+        final int PORT = 12345;
 
-        // TODO: Accept incoming client connections in a loop
-        //       For each connection:
-        //       - Create a new ClientHandler object
-        //       - Add it to the 'clients' list
-        //       - Start a new thread to handle communication
+        try (ServerSocket serverSocket = new ServerSocket(PORT)) {
+            System.out.println("Server started on port " + PORT);
+
+            while (true) {
+                Socket clientSocket = serverSocket.accept();
+                System.out.println("New client connected: " + clientSocket.getInetAddress());
+
+                ClientHandler clientHandler = new ClientHandler(clientSocket);
+                clients.add(clientHandler);
+                new Thread(clientHandler).start();
+            }
+        } catch (Exception e) {
+            System.err.println("Server error: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     public static boolean authenticate(String username, String password) {
@@ -33,5 +45,20 @@ public class Server {
             }
         }
         return false;
+    }
+
+    // Broadcast a message to all connected clients
+    public static void broadcast(String message, ClientHandler sender) {
+        for (ClientHandler client : clients) {
+            if (client != sender) {
+                client.sendMessage(message);
+            }
+        }
+    }
+
+    // Remove a client from the list when they disconnect
+    public static void removeClient(ClientHandler client) {
+        clients.remove(client);
+        System.out.println("Client disconnected. Total clients: " + clients.size());
     }
 }

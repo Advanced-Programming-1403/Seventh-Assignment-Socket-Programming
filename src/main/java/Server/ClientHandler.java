@@ -1,62 +1,134 @@
 package Server;
 
-import java.io.IOException;
+import java.io.*;
 import java.net.Socket;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 
 public class ClientHandler implements Runnable {
     private Socket socket;
-    // TODO: Declare a variable to hold the input stream from the socket
-    // TODO: Declare a variable to hold the output stream from the socket
+    private BufferedReader in;
+    private PrintWriter out;
+    private ObjectOutputStream objectOut;
+    private ObjectInputStream objectIn;
     private List<ClientHandler> allClients;
     private String username;
+    private static final String SERVER_FILES_DIR = "resources/Server/";
 
-    public ClientHandler() {
-        // TODO: Modify the constructor as needed
+    public ClientHandler(Socket socket) throws IOException {
+        this.socket = socket;
+        this.allClients = allClients;
+        this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+        this.out = new PrintWriter(socket.getOutputStream(), true);
+        this.objectOut = new ObjectOutputStream(socket.getOutputStream());
+        this.objectIn = new ObjectInputStream(socket.getInputStream());
     }
 
     @Override
     public void run() {
         try {
-            while (true) {
-                // TODO: Read incoming message from the input stream
-                // TODO: Process the message
+            String message;
+            while ((message = in.readLine()) != null) {
+                if (message.startsWith("LOGIN:")) {
+                    String[] parts = message.substring(6).split("\\|");
+                    handleLogin(parts[0], parts[1]);
+                } else if (message.equals("LIST_FILES")) {
+                    sendFileList();
+                } else if (message.startsWith("DOWNLOAD:")) {
+                    sendFile(message.substring(9));
+                } else if (message.startsWith("UPLOAD:")) {
+                    String[] parts = message.substring(7).split("\\|");
+                    receiveFile(parts[0], Integer.parseInt(parts[1]));
+                } else {
+                    broadcast(username + ": " + message);
+                }
             }
         } catch (Exception e) {
-
+            System.err.println("Error handling client: " + e.getMessage());
         } finally {
-            //TODO: Update the clients list in Server
+            try {
+                allClients.remove(this);
+                socket.close();
+                System.out.println(username + " disconnected");
+            } catch (IOException e) {
+                System.err.println("Error closing client connection: " + e.getMessage());
+            }
         }
     }
 
-
-    private void sendMessage(String msg){
-        //TODO: send the message (chat) to the client
+    void sendMessage(String msg) {
+        out.println(msg);
     }
+
     private void broadcast(String msg) throws IOException {
-        //TODO: send the message to every other user currently in the chat room
+        for (ClientHandler client : allClients) {
+            if (client != this) {
+                client.sendMessage(msg);
+            }
+        }
     }
 
-    private void sendFileList(){
-        // TODO: List all files in the server directory
-        // TODO: Send a message containing file names as a comma-separated string
+    private void sendFileList() throws IOException {
+        File serverDir = new File(SERVER_FILES_DIR);
+        File[] files = serverDir.listFiles();
+        StringBuilder fileList = new StringBuilder();
+
+        if (files != null) {
+            for (File file : files) {
+                if (file.isFile()) {
+                    if (fileList.length() > 0) fileList.append(",");
+                    fileList.append(file.getName());
+                }
+            }
+        }
+
+        out.println("FILE_LIST:" + fileList);
     }
-    private void sendFile(String fileName){
-        // TODO: Send file name and size to client
-        // TODO: Send file content as raw bytes
+
+    private void sendFile(String fileName) throws IOException {
+        Path filePath = Paths.get(SERVER_FILES_DIR + fileName);
+        if (Files.exists(filePath)) {
+            File file = filePath.toFile();
+            objectOut.writeObject(new FileMetadata(file.getName(), file.length()));
+            objectOut.write(Files.readAllBytes(filePath));
+            objectOut.flush();
+        } else {
+            out.println("ERROR:File not found");
+        }
     }
-    private void receiveFile(String filename, int fileLength)
-    {
-        // TODO: Receive uploaded file content and store it in a byte array
-        // TODO: after the upload is done, save it using saveUploadedFile
+
+    private void receiveFile(String filename, int fileLength) throws IOException {
+        byte[] fileData = new byte[fileLength];
+        objectIn.readFully(fileData);
+        saveUploadedFile(filename, fileData);
+        out.println("UPLOAD_SUCCESS:" + filename);
     }
+
     private void saveUploadedFile(String filename, byte[] data) throws IOException {
-        // TODO: Save the byte array to a file in the Server's resources folder
+        Path savePath = Paths.get(SERVER_FILES_DIR + filename);
+        Files.write(savePath, data);
     }
 
-    private void handleLogin(String username, String password) throws IOException, ClassNotFoundException {
-        // TODO: Call Server.authenticate(username, password) to check credentials
-        // TODO: Send success or failure response to the client
+    private void handleLogin(String username, String password) throws IOException {
+        if (Server.authenticate(username, password)) {
+            this.username = username;
+            out.println("LOGIN_SUCCESS");
+            System.out.println(username + " logged in successfully");
+        } else {
+            out.println("LOGIN_FAILED");
+        }
     }
 
+    // Helper class for file metadata
+    private static class FileMetadata implements Serializable {
+        String name;
+        long size;
+
+        FileMetadata(String name, long size) {
+            this.name = name;
+            this.size = size;
+        }
+    }
 }
