@@ -1,23 +1,36 @@
 package Client;
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.Socket;
 
 public class ClientReceiver implements Runnable {
-    // TODO: Declare a variable to hold the input stream from the socket
-    public ClientReceiver() {
-        // TODO: Modify this constructor to receive either a Socket or an InputStream as a parameter
-        // TODO: Initialize the input stream variable using the received parameter
+    private BufferedReader in;
+
+    public ClientReceiver(Socket socket) {
+        try {
+            this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+        } catch (Exception e) {
+            System.err.println("Error creating input stream: " + e.getMessage());
+        }
     }
 
     @Override
     public void run() {
         try {
-            while (true) {
-                //TODO: Listen for new messages from server
-                //TODO: print the  new message in CLI
+            String message;
+            while ((message = in.readLine()) != null) {
+                System.out.println(message);
             }
         } catch (Exception e) {
-
+            System.err.println("Connection lost: " + e.getMessage());
+        } finally {
+            try {
+                if (in != null) in.close();
+            } catch (Exception e) {
+                System.err.println("Error closing stream: " + e.getMessage());
+            }
         }
     }
-
 }
