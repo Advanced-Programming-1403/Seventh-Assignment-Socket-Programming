@@ -2,6 +2,8 @@ package Server;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
+
+import Client.Client;
 import Shared.User;
 public class Server {
     // Predefined users for authentication
@@ -17,13 +19,26 @@ public class Server {
     public static ArrayList<ClientHandler> clients = new ArrayList<>();
 
     public static void main(String[] args) throws Exception {
-        // TODO: Create a ServerSocket listening on a port (e.g., 12345)
+        final int PORT = 12345;
+        // ✅: Create a ServerSocket listening on a port (e.g., 12345)
+        ServerSocket serverSocket = new ServerSocket(PORT);
 
-        // TODO: Accept incoming client connections in a loop
+
+        // ✅: Accept incoming client connections in a loop
         //       For each connection:
         //       - Create a new ClientHandler object
         //       - Add it to the 'clients' list
         //       - Start a new thread to handle communication
+
+        while (true){
+            Socket clientSokect = serverSocket.accept();
+            System.out.println("New user connected : " + clientSokect.getInetAddress());
+
+            ClientHandler handler = new ClientHandler(clientSokect , clients);
+            clients.add(handler);
+            new Thread(handler).start();
+
+        }
     }
 
     public static boolean authenticate(String username, String password) {
